@@ -1,6 +1,7 @@
 #' app demo for SingleR application
 #' @import shiny
 #' @import shinytoastr
+#' @import shinythemes
 #' @import celldex
 #' @importFrom SingleR SingleR
 #' @importFrom scRNAseq MuraroPancreasData
@@ -19,23 +20,36 @@ scapp <- function() {
   optfuns <- c("None", "BlueprintEncodeData", "DatabaseImmuneCellExpressionData", 
                "HumanPrimaryCellAtlasData", "ImmGenData", "MonacoImmuneData", 
                "MouseRNAseqData", "NovershternHematopoieticData")
+  optplots <- c("PCA", "elbow", "TSNE", "UMAP")
   
   ui <- fluidPage(
     shinytoastr::useToastr(),
+    shinythemes::themeSelector(), # theme selection is possible to try out different ones
+    theme = shinythemes::shinytheme("sandstone"),  # choice of a single theme once we have decided 
+    titlePanel("Diamond24 scapp"),
     sidebarLayout(
       sidebarPanel(
         helpText("App for labeling single cells with selected references"),
-        radioButtons("ref", "refs", optfuns, selected = "None"),
-        numericInput("ncomp", "npcs", min = 2, max = 5, value = 2),
+        helpText(sprintf("Version %s", packageVersion("diamonds24"))),
+        radioButtons("ref", "References", optfuns, selected = "None"),
+        numericInput("ncomp", "Number of PCs in PCA plot", min = 2, max = 5, value = 2),
+        numericInput("ncomp2", "Number of PCs in UMAP", min = 2, max = 10, value = 2),
+        radioButtons("plot", "Plot type to download", optplots, selected = "PCA"),
+        downloadButton('downloadPlot', 'Download Plot'),
         fileInput("file", "Upload Data File", accept = c(".rds")),
-        helpText("Upload an .rds file containing your data"), width = 2
+        helpText("Upload an .rds file containing your data"), width = 4
       ),
       mainPanel(
         tabsetPanel(
-          tabPanel("main", plotOutput("view")),
-          tabPanel("interact", plotly::plotlyOutput("viewly")),
+          tabPanel("main PCA plot", plotOutput("view")),
+          tabPanel("interactive PCA", plotly::plotlyOutput("viewly")),
           tabPanel("author", plotOutput("auth")),
-          tabPanel("ref comp", verbatimTextOutput("called"))
+          tabPanel("ref comp", verbatimTextOutput("called")),
+          tabPanel("ref comp2", verbatimTextOutput("called2")),
+          tabPanel("elbow", plotOutput("elbow")),
+          tabPanel("tsne", plotOutput("tsne")),
+          tabPanel("umap", plotOutput("umap")),
+          tabPanel("diagnostics", plotly::plotlyOutput("diagnostics"))
         )
       )
     )
@@ -69,6 +83,7 @@ scapp <- function() {
         # Normalize and perform PCA
         sce_data <- scuttle::logNormCounts(sce_data)
         sce_data <- scater::runPCA(sce_data)
+        sce_data <- scater::runTSNE(sce_data)
         
         # Store in reactive value
         data(sce_data)
@@ -111,7 +126,8 @@ scapp <- function() {
     })
     
     output$auth <- renderPlot({
-      scater::plotPCA(data(), colour_by = "label", ncomponents = input$ncomp, theme_size = 14)
+      given <- run_SingleR()
+      scater::plotPCA(given, colour_by = "label", ncomponents = input$ncomp, theme_size = 14)
     })
     
     output$called <- renderPrint({
@@ -122,6 +138,64 @@ scapp <- function() {
         "No reference selected"
       }
     })
+    
+    output$called2 <- renderPrint({
+      if (input$ref != "None") {
+        ref2use <- get(input$ref)()
+        sort(table(ref2use$label.fine))
+      } else {
+        "No reference selected"
+      }
+    })
+    
+    output$elbow <- renderPlot({
+      given <- run_SingleR()
+      percent.var <- attr(SingleCellExperiment::reducedDim(given), "percentVar")
+      chosen.elbow <- findElbowPoint(percent.var)
+      plot(percent.var, xlab = "PC", ylab = "% variance explained", type = "b")  
+      abline(v = chosen.elbow, col = "red", lty = 2)
+    })
+    
+    output$tsne <- renderPlot({
+      given <- run_SingleR()
+      scater::plotTSNE(given, colour_by = "celltype")
+    })
+    
+    output$umap <- renderPlot({
+      given <- run_SingleR()
+      given <- scater::runUMAP(given, ncomponents = input$ncomp2)
+      scater::plotUMAP(given, colour_by = "celltype")
+    })
+    
+    output$diagnostics <- renderPlot({
+      given <- run_SingleR()
+      given <- scuttle::addPerCellQC(given, subsets = list(Mt = rowData(given)$featureType == "mito"))
+      qc <- scuttle::quickPerCellQC(colData(given), sub.fields = "subsets_Mt_percent")
+      given$discard <- qc$discard
+      scater::plotColData(given, x = "sum", y = "subsets_Mt_percent", colour_by = "discard")
+    })
+    
+    output$downloadPlot <- downloadHandler(
+      filename = function() {
+        paste("plot-", input$plot, ".png", sep = "")
+      },
+      content = function(file) {
+        png(file)
+        if (input$plot == "PCA") {
+          scater::plotPCA(given, colour_by = "label", ncomponents = input$ncomp, theme_size = 14)
+        } else if (input$plot == "elbow") {
+          percent.var <- attr(SingleCellExperiment::reducedDim(given), "percentVar")
+          chosen.elbow <- findElbowPoint(percent.var)
+          plot(percent.var, xlab = "PC", ylab = "% variance explained", type = "b")
+          abline(v = chosen.elbow, col = "red", lty = 2)
+        } else if (input$plot == "TSNE") {
+          scater::plotTSNE(given, colour_by = "celltype")
+        } else if (input$plot == "UMAP") {
+          scater::plotUMAP(given, colour_by = "celltype")
+        }
+        dev.off()
+      }
+    )
   }
   
   runApp(list(ui = ui, server = server))
