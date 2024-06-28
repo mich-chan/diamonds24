@@ -9,7 +9,7 @@ CSAMA 2024 shiny dev project
 try
 ```
 BiocManager::install(c("devtools", "remotes"))
-BiocManager::install("vjcitn/diamonds24")
+BiocManager::install("mich-chan/diamonds24")
 library(diamonds24)
 scapp()
 ```
