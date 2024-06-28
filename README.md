@@ -1,3 +1,8 @@
+<!-- badges: start -->
+  [![R-CMD-check](https://github.com/Bioconductor/CSAMA/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/Bioconductor/CSAMA/actions/workflows/R-CMD-check.yaml)
+  <!-- badges: end -->
+  
+
 # diamonds24
 CSAMA 2024 shiny dev project
 
