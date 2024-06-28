@@ -12,6 +12,8 @@
 #' @note We work just with the MuraroPancreasData, leaving
 #' more general upload capability as a project.
 #' @export
+
+
 scapp = function() {
 # derived from ls("package:celldex")
  optfuns = c("BlueprintEncodeData", "DatabaseImmuneCellExpressionData", 
@@ -22,7 +24,6 @@ scapp = function() {
   sidebarLayout(
    sidebarPanel(
     helpText("app for labeling single cells with selected references"),
-    helpText(sprintf("version %s", packageVersion("diamonds24"))),
     radioButtons("ref", "refs", optfuns, selected="HumanPrimaryCellAtlasData"),
 # consider option for label.main, label.fine
     numericInput("ncomp", "npcs", min=2, max=5, value=2),
@@ -31,11 +32,10 @@ scapp = function() {
     mainPanel(
      tabsetPanel(
       tabPanel("main", plotOutput("view")),
-      tabPanel("interact", plotly::plotlyOutput("viewly")),
+      tabPanel("interact", sidebarLayout(mainPanel = mainPanel(plotly::plotlyOutput("viewly")), sidebarPanel = sidebarPanel(checkboxGroupInput('checkly', label=NULL, choices=c())), position='right')),
       tabPanel("author", plotOutput("auth")),
-      tabPanel("ref comp", verbatimTextOutput("called")),
-      tabPanel("ref comp2", verbatimTextOutput("called2"))
-     )
+      tabPanel("ref comp", verbatimTextOutput("called"))
+     ),
     )
    )
   )
@@ -49,6 +49,7 @@ scapp = function() {
    given = scuttle::logNormCounts(given)
    given = scater::runPCA(given)
   #
+   
   run_SingleR = reactive({
    ref2use = get(input$ref)()
    myb = BiocParallel::MulticoreParam(4)
@@ -56,23 +57,38 @@ scapp = function() {
    sing = SingleR::SingleR(given, ref2use, ref2use$label.main, BPPARAM=myb)
    shinytoastr::toastr_info("done")
    given$celltype = sing$labels
+   updateCheckboxGroupInput(
+       inputId = 'checkly',
+       choices = unique(given$celltype),
+       selected = unique(given$celltype)
+   )
    #scater::runPCA(given)
    given
-   })
+  })
+  
   output$view = renderPlot({
    given = run_SingleR()
    scater::plotPCA(given, colour_by = "celltype", 
         ncomponents=input$ncomp, theme_size=14)
    })
-  output$viewly = plotly::renderPlotly({
-   given = run_SingleR()
-   dfr = SingleCellExperiment::reducedDim(given)
-   mydf = data.frame(PC1 = dfr[,1], PC2=dfr[,2], type=given$celltype)
-   gg = ggplot2::ggplot(mydf, aes(x=PC1, y=PC2, text=type,
-      colour=type)) +
-     ggplot2::geom_point()
-   plotly::ggplotly(gg)
-   })
+  
+   output$viewly = plotly::renderPlotly({
+       given = run_SingleR()
+       given = given[,which(given$celltype %in% input$checkly)]
+       dfr = SingleCellExperiment::reducedDim(given)
+       mydf = data.frame(PC1 = dfr[,1], PC2=dfr[,2], type=given$celltype)
+       print('available:')
+       print(unique(given$celltype))
+       print('selected:')
+       print(input$checkly)
+       gg = ggplot2::ggplot(mydf, aes(x=PC1, y=PC2, text=type,
+          colour=type)) +
+         ggplot2::geom_point() +
+         ggplot2::theme(legend.position = 'none')
+       plotly::ggplotly(gg) 
+  })       
+       
+
   output$auth = renderPlot({
    scater::plotPCA(given, colour_by = "label",
         ncomponents=input$ncomp, theme_size=14)
@@ -81,14 +97,9 @@ scapp = function() {
    ref2use = get(input$ref)()
    sort(table(ref2use$label.main))
    })
-  output$called2 = renderPrint({
-   ref2use = get(input$ref)()
-   sort(table(ref2use$label.fine))
-   })
  }
  runApp(list(ui=ui, server=server))
 }
 
-   
- 
- 
+
+scapp()
