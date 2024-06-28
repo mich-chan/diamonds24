@@ -12,6 +12,7 @@
 #' @import Seurat
 #' @import patchwork
 #' @import readr
+#' @import PCAtools
 #' @note We work just with the MuraroPancreasData, leaving
 #' more general upload capability as a project.
 #' @export
@@ -21,7 +22,7 @@ scapp <- function() {
                "HumanPrimaryCellAtlasData", "ImmGenData", "MonacoImmuneData", 
                "MouseRNAseqData", "NovershternHematopoieticData")
   optplots <- c("PCA", "elbow", "TSNE", "UMAP")
-  
+
   ui <- fluidPage(
     shinytoastr::useToastr(),
     shinythemes::themeSelector(), # theme selection is possible to try out different ones
@@ -54,7 +55,7 @@ scapp <- function() {
       )
     )
   )
-  
+
   server <- function(input, output) {
     # Set the maximum file upload size to 1GB
     options(shiny.maxRequestSize = 1024^3)
@@ -126,8 +127,8 @@ scapp <- function() {
     })
     
     output$auth <- renderPlot({
-      given <- run_SingleR()
-      scater::plotPCA(given, colour_by = "label", ncomponents = input$ncomp, theme_size = 14)
+      given = run_SingleR()
+      scater::plotPCA(data(), colour_by = "label", ncomponents = input$ncomp, theme_size = 14)
     })
     
     output$called <- renderPrint({
@@ -149,9 +150,9 @@ scapp <- function() {
     })
     
     output$elbow <- renderPlot({
-      given <- run_SingleR()
+      given = run_SingleR()
       percent.var <- attr(SingleCellExperiment::reducedDim(given), "percentVar")
-      chosen.elbow <- findElbowPoint(percent.var)
+      chosen.elbow <- PCAtools::findElbowPoint(percent.var)
       plot(percent.var, xlab = "PC", ylab = "% variance explained", type = "b")  
       abline(v = chosen.elbow, col = "red", lty = 2)
     })
@@ -168,7 +169,6 @@ scapp <- function() {
     })
     
     output$diagnostics <- renderPlot({
-      given <- run_SingleR()
       given <- scuttle::addPerCellQC(given, subsets = list(Mt = rowData(given)$featureType == "mito"))
       qc <- scuttle::quickPerCellQC(colData(given), sub.fields = "subsets_Mt_percent")
       given$discard <- qc$discard

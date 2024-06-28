@@ -1,7 +1,7 @@
 Package: diamonds24
-Date: 2024-06-25
+Date: 2024-06-27
 Title: Learning about shiny at CSAMA 2024.
-Version: 0.0.2
+Version: 0.0.4
 Authors@R: 
     c(person(
         "Vincent", "Carey", role = c("aut", "cre"),
